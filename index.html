@@ -1,0 +1,139 @@
+s// routes/task.js
+
+const express = require('express');
+const router = express.Router();
+const { getTasks, getDeletedTasks, getTaskById, addTask, updateTask, deleteTask, restoreTask, validCategories } = require('../data/tasks');
+
+router.get('/', (req, res) => {
+  let filteredTasks = getTasks();
+  
+  if (req.query.completed) {
+    const completed = req.query.completed === 'true';
+    filteredTasks = filteredTasks.filter(t => t.completed === completed);
+  }
+  
+  if (req.query.limit) {
+    const limit = parseInt(req.query.limit);
+    if (isNaN(limit) || limit < 0) {
+      return res.status(400).json({ error: 'Invalid limit value' });
+    }
+    filteredTasks = filteredTasks.slice(0, limit);
+  }
+  
+  if (req.query.category) {
+    if (!validCategories.includes(req.query.category)) {
+      return res.status(422).json({ error: 'Invalid category. Must be School, Work, Personal, or Other' });
+    }
+    filteredTasks = filteredTasks.filter(t => t.category === req.query.category);
+  }
+  
+  res.status(200).json({ data: filteredTasks });
+});
+
+router.get('/deleted', (req, res) => {
+  const deletedTasks = getDeletedTasks();
+  res.status(200).json({ data: deletedTasks });
+});
+
+router.get('/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid task ID' });
+  }
+  const task = getTaskById(id);
+  if (!task) {
+    return res.status(404).json({ error: 'Task not found or deleted' });
+  }
+  res.status(200).json({ data: task });
+});
+
+router.post('/', (req, res) => {
+  const { title, category = 'Other' } = req.body;
+  try {
+    const newTask = addTask(title, category);
+    res.status(201).json({ data: newTask });
+  } catch (error) {
+    const status = error.message.includes('category') ? 422 : 400;
+    res.status(status).json({ error: error.message });
+  }
+});
+
+router.put('/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid task ID' });
+  }
+  const { title, completed, category } = req.body;
+  try {
+    const updatedTask = updateTask(id, { title, completed, category });
+    if (!updatedTask) {
+      return res.status(404).json({ error: 'Task not found or deleted' });
+    }
+    res.status(200).json({ data: updatedTask });
+  } catch (error) {
+    const status = error.message.includes('category') ? 422 : 400;
+    res.status(status).json({ error: error.message });
+  }
+});
+
+router.delete('/:id', (req, soft) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid task ID' });
+  }
+  const success = deleteTask(id);
+  if (!success) {
+    return res.status(404).json({ error: 'Task not found or already deleted' });
+  }
+  res.status(204).json();
+});
+
+module.exports = router;
+
+// data/tasks.js
+
+let tasks = [
+  { id: 1, title: 'Finish homework', completed: false },
+  { id: 2, title: 'Read Node.js docs', completed: true }
+];
+
+const validCategories = ['School', 'Work', 'Personal', 'Other'];
+
+const getTasks = () => {
+  return [...tasks];
+};
+
+const getTaskById = (id) => {
+  return tasks.find(t => t.id === id) || null;
+};
+
+const addTask = (title, category) => {
+
+  if(!validCategories.includes(categories)){
+    throw new Error('Invalid category. Must be School, Work, Personal, or Other');
+  }
+  const newTask = { id: Date.now(), title, completed: false, category };
+  tasks.push(newTask);
+  return newTask;
+};
+
+const updateTask = (id, updates) => {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return null;
+  if (updates.category && !validCategories.includes(updates.category)) {
+    throw new Error('Invalid category. Must be School, Work, Personal, or Other');
+  }
+  task.title = updates.title || task.title;
+  task.completed = updates.completed !== undefined ? updates.completed : task.completed;
+  task.category = updates.category || task.category;
+  return task;
+};
+
+const deleteTask = (id) => {
+  const taskIndex = tasks.findIndex(t => t.id === id);
+  if (taskIndex === -1) return false;
+  tasks = tasks.filter(t => t.id !== id);
+  return true;
+};
+
+module.exports = { getTasks, getTaskById, addTask, updateTask, deleteTask, validCategories};
